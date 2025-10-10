@@ -149,21 +149,24 @@ class DataAnalysisExecutor(AgentExecutor):
             try:
                 import json
                 import re
-                # <thinking> 태그 제거
-                clean_response = re.sub(r'<thinking>.*?</thinking>', '', response, flags=re.DOTALL).strip()
+                # <thinking> 및 <response> 태그 제거
+                clean_response = re.sub(r'<thinking>.*?</thinking>', '', response, flags=re.DOTALL)
+                clean_response = re.sub(r'<response>|</response>', '', clean_response, flags=re.DOTALL).strip()
                 response_data = json.loads(clean_response)
                 status = response_data.get('status', 'completed')
                 message = response_data.get('message', response)
+                logger.info(f"Parsed status: {status}, message: {message[:100]}")
             except Exception as parse_error:
                 # JSON 파싱 실패 시 기본값
                 logger.warning(f"JSON parsing failed: {parse_error}, using defaults")
                 status = 'completed'
                 message = response
             
-            # Artifact 생성
+            # Artifact 생성 - 전체 JSON 응답 포함
+            full_json = json.dumps({"status": status, "message": message}, ensure_ascii=False)
             artifact = Artifact(
                 artifactId=str(uuid.uuid4()),
-                parts=[TextPart(text=message)]
+                parts=[TextPart(text=full_json)]
             )
             
             # Artifact 먼저 전송
