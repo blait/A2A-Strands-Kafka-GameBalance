@@ -52,6 +52,54 @@ a2a_server = A2AStarletteApplication(
 
 app = a2a_server.build()
 
+# Add custom streaming endpoint for GUI
+from starlette.routing import Route
+from starlette.responses import StreamingResponse
+import json
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+_agent_instance = None
+
+async def ask_stream(request):
+    body = await request.json()
+    query = body.get('query', '')
+    
+    async def generate():
+        try:
+            global _agent_instance
+            
+            # Create agent if not exists
+            if _agent_instance is None:
+                from game_balance_agent_executor import create_agent
+                _agent_instance = await create_agent()
+            
+            # Invoke agent
+            result = await _agent_instance.invoke_async(query)
+            full_response = result.output if hasattr(result, 'output') else str(result)
+            
+            # Extract and send thinking
+            thinking_matches = re.findall(r'<thinking>(.*?)</thinking>', full_response, re.DOTALL)
+            for thinking in thinking_matches:
+                yield f"data: {json.dumps({'type': 'thinking', 'content': thinking.strip()})}\n\n"
+            
+            # Send answer (remove thinking tags)
+            clean_response = re.sub(r'<thinking>.*?</thinking>', '', full_response, flags=re.DOTALL).strip()
+            
+            if clean_response:
+                yield f"data: {json.dumps({'type': 'answer', 'content': clean_response})}\n\n"
+            
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            logger.error(f"Streaming error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+app.routes.append(Route('/ask_stream', ask_stream, methods=['POST']))
+
 if __name__ == "__main__":
     print("⚖️ Starting Game Balance Agent on port 9001...", flush=True)
     
