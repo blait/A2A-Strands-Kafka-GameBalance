@@ -36,10 +36,11 @@ class A2AClient:
 
 a2a_client = A2AClient()
 
-def create_agent_tool(agent_id: str, agent_name: str, description: str):
-    @tool
-    async def call_agent(query: str) -> str:
-        f"""Call {agent_name}: {description}"""
+def create_agent_tool(agent_id: str, skill_name: str, description: str):
+    # Create function first
+    async def delegation_function(query: str) -> str:
+        print(f"🔧 [Tool] Calling {skill_name} (agent: {agent_id}) with query: {query}", flush=True)
+        logger.info(f"🔧 Calling tool: {skill_name} with query: {query}")
         transport = a2a_client.get_transport(agent_id)
         
         msg = Message(
@@ -59,36 +60,68 @@ def create_agent_tool(agent_id: str, agent_name: str, description: str):
                         if hasattr(part, 'root') and hasattr(part.root, 'text'):
                             response_text += part.root.text
         
+        print(f"✅ [Tool] {skill_name} returned: {response_text[:100]}", flush=True)
+        logger.info(f"✅ Tool {skill_name} returned: {response_text[:100]}")
         return response_text if response_text else "No response"
     
-    call_agent.__name__ = f"call_{agent_id}_agent"
-    return call_agent
+    # Set metadata BEFORE @tool decorator
+    delegation_function.__name__ = skill_name
+    delegation_function.__doc__ = f"{description}"
+    
+    # Apply tool decorator and return
+    return tool(delegation_function)
 
 # Agent creation
 async def create_agent():
     await a2a_client.init()
     
+    print(f"\n🔍 [Balance Agent] Discovered Agents:", flush=True)
+    for agent_id, card in a2a_client.agent_cards.items():
+        print(f"  - {agent_id}: {card['name']}", flush=True)
+        print(f"    Description: {card['description']}", flush=True)
+        for skill in card.get('skills', []):
+            print(f"    Skill: {skill['name']} - {skill['description']}", flush=True)
+    print("", flush=True)
+    
     tools = []
     for agent_id, card in a2a_client.agent_cards.items():
         if agent_id == "balance":
             continue
-        skills_desc = ", ".join([s.get('description', '') for s in card.get('skills', [])])
-        tool_func = create_agent_tool(agent_id, card['name'], skills_desc)
-        tools.append(tool_func)
+        
+        # Create tool for each skill
+        for skill in card.get('skills', []):
+            skill_name = skill['name']
+            skill_desc = skill['description']
+            tool_func = create_agent_tool(agent_id, skill_name, skill_desc)
+            tools.append(tool_func)
+            print(f"✅ [Balance Agent] Created tool: {skill_name} (calls {agent_id})", flush=True)
+    
+    # Build dynamic tool descriptions
+    tool_descriptions = []
+    for agent_id, card in a2a_client.agent_cards.items():
+        if agent_id == "balance":
+            continue
+        for skill in card.get('skills', []):
+            tool_descriptions.append(f"- call_{agent_id}_agent: {skill['description']}")
+    
+    tools_text = "\n".join(tool_descriptions)
     
     return Agent(
         name="Game Balance Agent",
         model=BedrockModel(model_id="us.amazon.nova-lite-v1:0", temperature=0.3),
         tools=tools,
-        system_prompt="""당신은 게임 밸런스 조정 담당자입니다.
+        system_prompt=f"""당신은 게임 밸런스 조정 담당자입니다.
 
-**필수: 사용자가 게임 데이터를 물어보면 반드시 사용 가능한 도구를 사용하세요.**
+**사용 가능한 도구:**
+{tools_text}
+
+**중요: 사용자 요청에 맞는 도구를 사용하세요. 여러 정보가 필요하면 여러 도구를 사용하세요.**
 
 **응답 형식 (JSON):**
-{
+{{
   "status": "completed" | "input-required" | "failed",
   "message": "사용자에게 보여줄 메시지"
-}
+}}
 
 **중요: 모든 응답은 한글로 작성하세요.**"""
     )
@@ -137,7 +170,10 @@ class GameBalanceExecutor(AgentExecutor):
                 full_input = input_text
             
             # Execute agent
+            print(f"🔧 [Executor] Calling agent.invoke_async...", flush=True)
+            logger.info(f"Calling agent.invoke_async with input: {full_input[:200]}")
             result = await agent.invoke_async(full_input)
+            print(f"🔧 [Executor] Agent returned result", flush=True)
             response = result.output if hasattr(result, 'output') else str(result)
             
             logger.info(f"Agent raw response: {response[:500]}")

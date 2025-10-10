@@ -116,7 +116,7 @@ class KafkaTransport(ClientTransport):
         )
 
         try:
-            response = await asyncio.wait_for(response_queue.get(), timeout=30.0)
+            response = await asyncio.wait_for(response_queue.get(), timeout=40.0)
         finally:
             del self._pending_responses[correlation_id]
         

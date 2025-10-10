@@ -46,23 +46,30 @@ agent = Agent(
     tools=[get_feedback],
     system_prompt="""당신은 고객 지원 담당자입니다.
 
-**응답 형식 (JSON):**
-{
-  "status": "completed" | "input_required" | "error",
-  "message": "사용자에게 보여줄 메시지"
-}
-
-**도구 사용:**
-- get_feedback(): 모든 피드백 조회
+도구:
 - get_feedback(race="Terran"): 특정 종족 피드백
 - get_feedback(urgency="high"): 긴급도별 피드백
 
-**상태 결정:**
-- completed: 요청을 완료하고 결과를 제공한 경우
-- input_required: 추가 정보가 필요한 경우
-- error: 오류 발생 시
+**중요: 도구 호출 시 종족명은 반드시 영어로 사용하세요:**
+- 테란 → Terran
+- 저그 → Zerg
+- 프로토스 → Protoss
 
-**중요: 모든 응답은 한글로 작성하세요.**"""
+**응답 형식:**
+반드시 JSON 형식으로 응답하세요:
+{
+  "status": "input_required" | "completed" | "error",
+  "message": "사용자에게 보낼 메시지"
+}
+
+**상태 규칙:**
+- status='input_required': 사용자가 종족(테란/저그/프로토스) 또는 긴급도를 명시하지 않았을 때
+- status='completed': 피드백 조회를 완료했을 때
+- status='error': 에러 발생 시
+
+**중요: 사용자가 "피드백"이라고만 물어보면 어떤 종족 또는 긴급도인지 반드시 되물으세요.**
+
+모든 응답은 한글로 작성하세요."""
 )
 
 class CSFeedbackExecutor(AgentExecutor):
@@ -78,6 +85,7 @@ class CSFeedbackExecutor(AgentExecutor):
                     if hasattr(part, 'root') and hasattr(part.root, 'text'):
                         input_text += part.root.text
             
+            print(f"🔧 [CS Executor] Task {context.task_id}: '{input_text}'", flush=True)
             logger.info(f"Executing task {context.task_id}: '{input_text}'")
             
             # 대화 히스토리 구성
@@ -95,9 +103,11 @@ class CSFeedbackExecutor(AgentExecutor):
             else:
                 full_input = input_text
             
+            print(f"🔧 [CS Executor] Full context: {full_input[:100]}", flush=True)
             logger.info(f"Full context: {full_input}")
             
             # Agent 스트리밍 실행
+            print(f"🔧 [CS Executor] Calling agent.stream_async...", flush=True)
             full_response = ""
             thinking_buffer = ""
             
@@ -132,37 +142,45 @@ class CSFeedbackExecutor(AgentExecutor):
                 result = await agent.invoke_async(full_input)
                 full_response = result.output if hasattr(result, 'output') else str(result)
             
+            print(f"🔧 [CS Executor] Agent response: {full_response[:200]}", flush=True)
             logger.info(f"Agent response: {full_response}")
             response = full_response
             
             # JSON 파싱 시도
             try:
-                # <thinking> 태그 제거
-                clean_response = re.sub(r'<thinking>.*?</thinking>', '', response, flags=re.DOTALL).strip()
+                # <thinking> 및 <response> 태그 제거
+                clean_response = re.sub(r'<thinking>.*?</thinking>', '', response, flags=re.DOTALL)
+                clean_response = re.sub(r'<response>|</response>', '', clean_response, flags=re.DOTALL).strip()
                 response_data = json.loads(clean_response)
                 status = response_data.get('status', 'completed')
                 message = response_data.get('message', response)
+                print(f"🔧 [CS Executor] Parsed - status: {status}, message: {message[:100]}", flush=True)
+                logger.info(f"Parsed status: {status}, message: {message[:100]}")
             except Exception as parse_error:
                 # JSON 파싱 실패 시 기본값
                 logger.warning(f"JSON parsing failed: {parse_error}, using defaults")
                 status = 'completed'
                 message = response
             
-            # Artifact 생성
+            # Artifact 생성 - 전체 JSON 응답 포함
+            full_json = json.dumps({"status": status, "message": message}, ensure_ascii=False)
             artifact = Artifact(
                 artifactId=str(uuid.uuid4()),
-                parts=[TextPart(text=message)]
+                parts=[TextPart(text=full_json)]
             )
             
             # Artifact 먼저 전송
+            print(f"🔧 [CS Executor] Sending artifact...", flush=True)
             await event_queue.enqueue_event(TaskArtifactUpdateEvent(
                 taskId=context.task_id,
                 contextId=context.context_id,
                 artifact=artifact
             ))
+            print(f"🔧 [CS Executor] Artifact sent", flush=True)
             
             # 상태에 따라 Task 업데이트
             if status == 'input_required':
+                print(f"🔧 [CS Executor] Sending status: input_required", flush=True)
                 await event_queue.enqueue_event(TaskStatusUpdateEvent(
                     taskId=context.task_id,
                     contextId=context.context_id,
@@ -170,6 +188,7 @@ class CSFeedbackExecutor(AgentExecutor):
                     final=True
                 ))
             elif status == 'error':
+                print(f"🔧 [CS Executor] Sending status: failed", flush=True)
                 await event_queue.enqueue_event(TaskStatusUpdateEvent(
                     taskId=context.task_id,
                     contextId=context.context_id,
@@ -177,12 +196,14 @@ class CSFeedbackExecutor(AgentExecutor):
                     final=True
                 ))
             else:  # completed
+                print(f"🔧 [CS Executor] Sending status: completed", flush=True)
                 await event_queue.enqueue_event(TaskStatusUpdateEvent(
                     taskId=context.task_id,
                     contextId=context.context_id,
                     status=TaskStatus(state=TaskState.completed),
                     final=True
                 ))
+            print(f"✅ [CS Executor] Task {context.task_id} completed", flush=True)
                 
         except Exception as e:
             logger.error(f"Error executing task: {e}", exc_info=True)
