@@ -37,10 +37,8 @@ class A2AClient:
 a2a_client = A2AClient()
 
 def create_agent_tool(agent_id: str, skill_name: str, description: str):
-    # Create function first
     async def delegation_function(query: str) -> str:
-        print(f"🔧 [Tool] Calling {skill_name} (agent: {agent_id}) with query: {query}", flush=True)
-        logger.info(f"🔧 Calling tool: {skill_name} with query: {query}")
+        print(f"🔧 Tool: {skill_name} | Agent: {agent_id} | Query: {query}", flush=True)
         transport = a2a_client.get_transport(agent_id)
         
         msg = Message(
@@ -50,25 +48,25 @@ def create_agent_tool(agent_id: str, skill_name: str, description: str):
             message_id=uuid4().hex
         )
         
-        result = await transport.send_message(MessageSendParams(message=msg))
-        
         response_text = ""
-        if hasattr(result, 'artifacts') and result.artifacts:
-            for artifact in result.artifacts:
-                if hasattr(artifact, 'parts'):
-                    for part in artifact.parts:
-                        if hasattr(part, 'root') and hasattr(part.root, 'text'):
-                            response_text += part.root.text
         
-        print(f"✅ [Tool] {skill_name} returned: {response_text[:100]}", flush=True)
-        logger.info(f"✅ Tool {skill_name} returned: {response_text[:100]}")
+        async for event in transport.send_message_streaming(MessageSendParams(message=msg)):
+            if hasattr(event, 'artifact') and event.artifact:
+                artifact = event.artifact
+                if hasattr(artifact, 'parts') and artifact.parts:
+                    for part in artifact.parts:
+                        if hasattr(part, 'text'):
+                            chunk = part.text
+                            response_text += chunk
+                        elif hasattr(part, 'root') and hasattr(part.root, 'text'):
+                            chunk = part.root.text
+                            response_text += chunk
+        
+        print(f"✅ Response from {agent_id}: {response_text[:80]}...", flush=True)
         return response_text if response_text else "No response"
     
-    # Set metadata BEFORE @tool decorator
     delegation_function.__name__ = skill_name
     delegation_function.__doc__ = f"{description}"
-    
-    # Apply tool decorator and return
     return tool(delegation_function)
 
 # Agent creation
@@ -110,7 +108,7 @@ async def create_agent():
         name="Game Balance Agent",
         model=BedrockModel(model_id="us.amazon.nova-lite-v1:0", temperature=0.3),
         tools=tools,
-        system_prompt=f"""당신은 게임 밸런스 조정 담당자입니다.
+        system_prompt=f"""당신은 게임 밸런스 조정 담당자입니다. 도구들을 통해 문제를 파악하고 종합적으로 판단하여 리포트형식으로 결과를 제안합니다.  
 
 **사용 가능한 도구:**
 {tools_text}
@@ -154,25 +152,10 @@ class GameBalanceExecutor(AgentExecutor):
             print(f"🔧 [Executor] Input: {input_text}", flush=True)
             logger.info(f"Executing task {context.task_id}: '{input_text}'")
             
-            # Build conversation history
-            history = []
-            if context.current_task and hasattr(context.current_task, 'artifacts'):
-                for artifact in context.current_task.artifacts:
-                    if hasattr(artifact, 'parts'):
-                        for part in artifact.parts:
-                            if hasattr(part, 'text'):
-                                history.append(part.text)
-            
-            # Full context
-            if history:
-                full_input = f"Previous conversation:\n" + "\n".join(history[-6:]) + f"\n\nCurrent question: {input_text}"
-            else:
-                full_input = input_text
-            
-            # Execute agent
+            # Execute agent (no history - GUI handles multi-turn)
             print(f"🔧 [Executor] Calling agent.invoke_async...", flush=True)
-            logger.info(f"Calling agent.invoke_async with input: {full_input[:200]}")
-            result = await agent.invoke_async(full_input)
+            logger.info(f"Calling agent.invoke_async with input: {input_text[:200]}")
+            result = await agent.invoke_async(input_text)
             print(f"🔧 [Executor] Agent returned result", flush=True)
             response = result.output if hasattr(result, 'output') else str(result)
             

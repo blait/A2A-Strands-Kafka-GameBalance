@@ -83,59 +83,34 @@ async def ask_stream(request):
         try:
             global _agent_instance
             
-            # Create agent if not exists
             if _agent_instance is None:
                 from game_balance_agent_executor import create_agent
                 _agent_instance = await create_agent()
             
-            # Capture stdout to get tool usage
-            import sys
-            from io import StringIO
-            old_stdout = sys.stdout
-            sys.stdout = captured_output = StringIO()
-            
-            try:
-                # Invoke agent
-                result = await _agent_instance.invoke_async(query)
-                full_response = result.output if hasattr(result, 'output') else str(result)
-            finally:
-                # Restore stdout and get captured content
-                sys.stdout = old_stdout
-                tool_output = captured_output.getvalue()
-            
-            # Log full response and tool output
-            logger.info(f"=== Full Response ===\n{full_response}")
-            logger.info(f"=== Tool Output ===\n{tool_output}")
-            
-            # Extract thinking and tool usage
-            thinking_parts = []
-            
-            # Get thinking tags from response
-            thinking_matches = re.findall(r'<thinking>(.*?)</thinking>', full_response, re.DOTALL)
-            thinking_parts.extend([t.strip() for t in thinking_matches])
-            
-            # Get tool usage from captured stdout
-            if tool_output:
-                # Extract tool calls and results (don't filter, show all)
-                tool_lines = [line for line in tool_output.split('\n') if line.strip()]
-                if tool_lines:
-                    thinking_parts.append('\n'.join(tool_lines))
-            
-            # Send all thinking content
-            if thinking_parts:
-                combined_thinking = '\n\n'.join(thinking_parts)
-                logger.info(f"=== Thinking Content ===\n{combined_thinking}")
-                yield f"data: {json.dumps({'type': 'thinking', 'content': combined_thinking})}\n\n"
-            
-            # Send answer (remove thinking tags, send all at once)
-            clean_response = re.sub(r'<thinking>.*?</thinking>', '', full_response, flags=re.DOTALL).strip()
-            
-            logger.info(f"=== Clean Response ===\n{clean_response}")
-            
-            if clean_response:
-                yield f"data: {json.dumps({'type': 'answer', 'content': clean_response})}\n\n"
+            # Stream with tool/agent info
+            async for chunk in _agent_instance.stream_async(query):
+                if isinstance(chunk, dict):
+                    # Tool usage events
+                    if 'event' in chunk:
+                        event = chunk['event']
+                        
+                        # Tool start
+                        if 'contentBlockStart' in event:
+                            start = event['contentBlockStart']
+                            if 'start' in start and 'toolUse' in start['start']:
+                                tool_info = start['start']['toolUse']
+                                tool_name = tool_info.get('name', 'unknown')
+                                thinking = f"🔧 Tool: {tool_name}"
+                                yield f"data: {json.dumps({'type': 'thinking', 'content': thinking}, ensure_ascii=False)}\n\n"
+                    
+                    # Actual text content
+                    if 'data' in chunk:
+                        text = chunk['data']
+                        if text:
+                            yield f"data: {json.dumps({'type': 'answer', 'content': text}, ensure_ascii=False)}\n\n"
             
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
         except Exception as e:
             logger.error(f"Streaming error: {e}", exc_info=True)
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"

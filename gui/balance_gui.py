@@ -6,6 +6,8 @@ Port: 8501
 
 import streamlit as st
 import requests
+import json
+import re
 
 # Agent URL
 AGENT_URL = "http://localhost:9001"
@@ -49,13 +51,33 @@ st.caption("다른 에이전트들과 A2A 통신하여 종합 밸런스 분석 �
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Function to parse and display content
+def parse_display_content(content):
+    clean = content.strip()
+    json_match = re.search(r'(\{.*\})', clean, re.DOTALL)
+    if json_match:
+        try:
+            rj = json.loads(json_match.group(1))
+            if 'status' in rj and 'message' in rj:
+                status = rj.get('status', 'completed')
+                msg = rj.get('message', '')
+                icon = {'completed': '✅', 'input_required': '❓', 'error': '❌'}.get(status, '📝')
+                return f"**{icon} {status.upper()}**\n\n{msg}"
+            else:
+                return clean
+        except json.JSONDecodeError:
+            return clean
+    else:
+        return clean
+
 # Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if message["role"] == "assistant" and "thinking" in message:
-            with st.expander("🧠 사고 과정 보기"):
-                st.markdown(message["thinking"])
-        st.markdown(message["content"])
+            with st.expander("🧠 사고 과정 보기", expanded=True):
+                st.code(message["thinking"])
+        display = parse_display_content(message["content"])
+        st.markdown(display)
 
 # Chat input
 if prompt := st.chat_input("질문을 입력하세요 (예: 게임 밸런스 분석해줘)"):
@@ -66,17 +88,19 @@ if prompt := st.chat_input("질문을 입력하세요 (예: 게임 밸런스 분
     
     # Send to agent with streaming
     with st.chat_message("assistant"):
-        thinking_placeholder = st.empty()
-        answer_placeholder = st.empty()
+        # Thinking at top - update in real-time
+        with st.expander("🧠 사고 과정 (실시간)", expanded=True):
+            thinking_placeholder = st.empty()
+        
+        # Answer below - update in real-time
+        answer_md = st.empty()
         
         thinking_text = ""
         answer_text = ""
         
-        # Show loading indicator
-        answer_placeholder.markdown("⏳ 응답 대기 중...")
+        answer_md.markdown("⏳ 응답 대기 중...")
         
         try:
-            import json
             response = requests.post(
                 f"{AGENT_URL}/ask_stream",
                 json={"query": prompt},
@@ -91,50 +115,59 @@ if prompt := st.chat_input("질문을 입력하세요 (예: 게임 밸런스 분
                         data = json.loads(line[6:])
                         
                         if data['type'] == 'thinking':
-                            thinking_text += data['content']
-                            with thinking_placeholder.expander("🧠 사고 과정 (실시간)", expanded=True):
-                                st.markdown(f"```\n{thinking_text}\n```")
+                            thinking_text += data['content'] + "\n"
+                            thinking_placeholder.code(thinking_text)
+                        
                         elif data['type'] == 'answer':
                             answer_text += data['content']
-                            answer_placeholder.markdown(answer_text.replace('\\n', '\n'))
+                            
+                            # Extract any complete <thinking> blocks from answer_text
+                            thinking_matches = re.findall(r'<thinking>(.*?)</thinking>', answer_text, re.DOTALL)
+                            if thinking_matches:
+                                for match in thinking_matches:
+                                    thinking_text += match.strip() + "\n"
+                                answer_text = re.sub(r'<thinking>.*?</thinking>', '', answer_text, flags=re.DOTALL)
+                                thinking_placeholder.code(thinking_text)
+                            
+                            clean = answer_text.strip()
+                            
+                            json_match = re.search(r'(\{.*\})', clean, re.DOTALL)
+                            if json_match:
+                                try:
+                                    rj = json.loads(json_match.group(1))
+                                    if 'status' in rj and 'message' in rj:
+                                        status = rj.get('status', 'completed')
+                                        msg = rj.get('message', '')
+                                        icon = {'completed': '✅', 'input_required': '❓', 'error': '❌'}.get(status, '📝')
+                                        display = f"**{icon} {status.upper()}**\n\n{msg}"
+                                    else:
+                                        display = clean
+                                except json.JSONDecodeError:
+                                    display = clean
+                            else:
+                                display = clean
+                            
+                            answer_md.markdown(display)
+                        
                         elif data['type'] == 'done':
                             break
             
-            # Parse JSON response
-            try:
-                import re
-                clean_text = re.sub(r'<thinking>.*?</thinking>', '', answer_text, flags=re.DOTALL).strip()
-                json_match = re.search(r'\{[^}]*"status"[^}]*"message"[^}]*\}', clean_text, re.DOTALL)
-                if json_match:
-                    response_json = json.loads(json_match.group())
-                    status = response_json.get('status', 'completed')
-                    message = response_json.get('message', '')
-                    
-                    # Status icon
-                    status_icon = {'input_required': '❓', 'completed': '✅', 'error': '❌'}.get(status, '📝')
-                    # Format: Status: [icon] [status]\nMessage: [icon] [message]
-                    final_message = f"**Status:** {status_icon} {status}\n\n**Message:** 💬 {message}"
-                else:
-                    final_message = clean_text
-            except:
-                final_message = answer_text
-            
-            answer_placeholder.markdown(final_message)
+            # Final clean for storage
+            clean = answer_text.strip()
+            final_display = parse_display_content(clean)
             
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": final_message,
+                "content": clean,
                 "thinking": thinking_text
             })
+            
+            # Update the final display
+            answer_md.markdown(final_display)
             
         except Exception as e:
             st.error(f"에러 발생: {str(e)}")
             st.info("에이전트가 실행 중인지 확인하세요: `python agents/game_balance_agent.py`")
-        
-        except Exception as e:
-            error_msg = f"연결 실패: {str(e)}"
-            message_placeholder.error(error_msg)
-            st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
 # Sidebar
 with st.sidebar:
@@ -158,4 +191,3 @@ with st.sidebar:
     if st.button("대화 기록 초기화"):
         st.session_state.messages = []
         st.rerun()
-

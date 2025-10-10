@@ -69,8 +69,13 @@ class KafkaTransport(ClientTransport):
         try:
             async for msg in self.consumer:
                 correlation_id = msg.key.decode()
+                logger.info(f"📨 [Transport] Received response for correlation_id={correlation_id}")
+                print(f"📨 [Transport] Received response for {correlation_id}", flush=True)
                 if correlation_id in self._pending_responses:
                     await self._pending_responses[correlation_id].put(msg.value)
+                    logger.info(f"✅ [Transport] Put response in queue for {correlation_id}")
+                else:
+                    logger.warning(f"⚠️ [Transport] No pending request for {correlation_id}")
         except Exception as e:
             logger.error(f"Error in response consumer: {e}")
 
@@ -141,33 +146,46 @@ class KafkaTransport(ClientTransport):
         response_queue = asyncio.Queue()
         self._pending_responses[correlation_id] = response_queue
 
-        payload = {"method": "send_message_streaming", "params": request}
+        payload = {
+            "method": "send_message_streaming",
+            "params": {
+                "message": request.message.model_dump() if hasattr(request.message, 'model_dump') else request.message.__dict__
+            }
+        }
         payload = await self._apply_interceptors("send_message_streaming", payload, context)
 
+        logger.info(f"📤 [Transport] Sending streaming request to agent.{self.target_agent_name}.requests, correlation_id={correlation_id}")
         await self.producer.send(
             f"agent.{self.target_agent_name}.requests",
             key=correlation_id.encode(),
             value=payload,
         )
+        logger.info(f"✅ [Transport] Request sent, waiting for responses...")
 
         try:
             while True:
+                logger.info(f"⏳ [Transport] Waiting for response from queue for {correlation_id}")
                 response = await response_queue.get()
+                logger.info(f"📦 [Transport] Got response: final={response.get('final')}, type={response.get('type')}")
                 
                 if response.get("error"):
                     raise Exception(f"Agent error: {response['error']}")
                 
                 if response.get("final"):
+                    logger.info(f"🏁 [Transport] Stream completed for {correlation_id}")
                     break
                 
                 event_type = response.get("type")
-                if event_type == "task":
+                logger.info(f"🎯 [Transport] Yielding event type={event_type}")
+                
+                # Match class names from Kafka Consumer Handler
+                if event_type == "Task" or event_type == "task":
                     yield Task(**response)
-                elif event_type == "message":
+                elif event_type == "Message" or event_type == "message":
                     yield Message(**response)
-                elif event_type == "task_status_update":
+                elif event_type == "TaskStatusUpdateEvent" or event_type == "task_status_update":
                     yield TaskStatusUpdateEvent(**response)
-                elif event_type == "task_artifact_update":
+                elif event_type == "TaskArtifactUpdateEvent" or event_type == "task_artifact_update":
                     yield TaskArtifactUpdateEvent(**response)
         finally:
             if correlation_id in self._pending_responses:
