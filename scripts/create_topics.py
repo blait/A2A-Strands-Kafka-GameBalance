@@ -3,26 +3,30 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Get bootstrap servers from environment variable
+MSK_BOOTSTRAP_SERVERS = os.getenv(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "localhost:9092"  # Default to local for development
+)
+
+# Import from kafka-python package (not local kafka folder)
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
 
-# MSK Configuration
-MSK_BOOTSTRAP_SERVERS = "b-3.a2akafka.79ocda.c2.kafka.ap-northeast-2.amazonaws.com:9092,b-1.a2akafka.79ocda.c2.kafka.ap-northeast-2.amazonaws.com:9092,b-2.a2akafka.79ocda.c2.kafka.ap-northeast-2.amazonaws.com:9092"
-
 TOPICS = {
-    "agent.data.requests": {"partitions": 3, "replication_factor": 2},
-    "agent.data.responses": {"partitions": 3, "replication_factor": 2},
-    "agent.cs.requests": {"partitions": 3, "replication_factor": 2},
-    "agent.cs.responses": {"partitions": 3, "replication_factor": 2},
-    "agent.balance.requests": {"partitions": 3, "replication_factor": 2},
-    "agent.balance.responses": {"partitions": 3, "replication_factor": 2},
+    "agent.data.requests": {"partitions": 3, "replication_factor": 1},
+    "agent.data.responses": {"partitions": 3, "replication_factor": 1},
+    "agent.cs.requests": {"partitions": 3, "replication_factor": 1},
+    "agent.cs.responses": {"partitions": 3, "replication_factor": 1},
+    "agent.balance.requests": {"partitions": 3, "replication_factor": 1},
+    "agent.balance.responses": {"partitions": 3, "replication_factor": 1},
+    "agent.registry": {"partitions": 1, "replication_factor": 1},
 }
 
 def create_topics():
     """Create all required topics."""
-    print(f"🔗 Connecting to MSK: {MSK_BOOTSTRAP_SERVERS}")
+    print(f"🔗 Connecting to Kafka: {MSK_BOOTSTRAP_SERVERS}")
     
     admin_client = KafkaAdminClient(
         bootstrap_servers=MSK_BOOTSTRAP_SERVERS,
@@ -62,3 +66,4 @@ def create_topics():
 if __name__ == "__main__":
     success = create_topics()
     sys.exit(0 if success else 1)
+

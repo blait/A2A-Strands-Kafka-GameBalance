@@ -15,6 +15,7 @@ from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCard, AgentSkill, AgentCapabilities
+from common.config import agent_config
 from data_analysis_agent_executor import DataAnalysisExecutor, agent
 from kafka.agent_registry import register_agent
 from kafka.kafka_consumer_handler import KafkaConsumerHandler
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 agent_card = AgentCard(
     name="Data Analysis Agent",
     description="게임 통계와 승률을 분석하는 에이전트",
-    url="http://localhost:9003",
+    url=agent_config.data_url,
     version="1.0.0",
     defaultInputModes=["text/plain"],
     defaultOutputModes=["text/plain"],
@@ -96,7 +97,7 @@ app = a2a_server.build()
 app.routes.append(Route('/ask_stream', ask_stream, methods=['POST']))
 
 if __name__ == "__main__":
-    logger.info("Starting Data Analysis Agent on port 9003...")
+    logger.info(f"Starting Data Analysis Agent on port {agent_config.data_port}...")
     
     import threading
     
@@ -139,4 +140,4 @@ if __name__ == "__main__":
     logger.info("✅ Kafka consumer started in background")
     
     # 3. Start HTTP server
-    uvicorn.run(app, host="0.0.0.0", port=9003)
+    uvicorn.run(app, host=agent_config.data_host, port=agent_config.data_port)

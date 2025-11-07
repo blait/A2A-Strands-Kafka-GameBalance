@@ -168,26 +168,3 @@ if prompt := st.chat_input("질문을 입력하세요 (예: 게임 밸런스 분
         except Exception as e:
             st.error(f"에러 발생: {str(e)}")
             st.info("에이전트가 실행 중인지 확인하세요: `python agents/game_balance_agent.py`")
-
-# Sidebar
-with st.sidebar:
-    st.header("에이전트 정보")
-    st.info(f"**URL**: {AGENT_URL}")
-    st.info("**포트**: 8000")
-    
-    st.header("빠른 질문")
-    if st.button("게임 밸런스 분석"):
-        st.session_state.messages.append({"role": "user", "content": "게임 밸런스 분석해줘"})
-        st.rerun()
-    
-    if st.button("테란 승률 확인"):
-        st.session_state.messages.append({"role": "user", "content": "테란 승률은?"})
-        st.rerun()
-    
-    if st.button("저그 피드백 확인"):
-        st.session_state.messages.append({"role": "user", "content": "저그 피드백 보여줘"})
-        st.rerun()
-    
-    if st.button("대화 기록 초기화"):
-        st.session_state.messages = []
-        st.rerun()

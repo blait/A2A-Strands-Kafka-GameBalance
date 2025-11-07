@@ -5,8 +5,12 @@ import asyncio
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
 
-async def register_agent(agent_id: str, agent_card: dict, bootstrap_servers: str = "localhost:9092"):
+async def register_agent(agent_id: str, agent_card: dict, bootstrap_servers: str | None = None):
     """Register agent to Kafka registry."""
+    if bootstrap_servers is None:
+        from common.config import kafka_config
+        bootstrap_servers = kafka_config.bootstrap_servers
+    
     producer = AIOKafkaProducer(
         bootstrap_servers=bootstrap_servers,
         value_serializer=lambda v: json.dumps(v).encode()
@@ -24,8 +28,12 @@ async def register_agent(agent_id: str, agent_card: dict, bootstrap_servers: str
         await producer.stop()
 
 
-async def discover_agents(bootstrap_servers: str = "localhost:9092", timeout: int = 5):
+async def discover_agents(bootstrap_servers: str | None = None, timeout: int = 5):
     """Discover all agents from Kafka registry."""
+    if bootstrap_servers is None:
+        from common.config import kafka_config
+        bootstrap_servers = kafka_config.bootstrap_servers
+    
     consumer = AIOKafkaConsumer(
         "agent.registry",
         bootstrap_servers=bootstrap_servers,
@@ -38,10 +46,10 @@ async def discover_agents(bootstrap_servers: str = "localhost:9092", timeout: in
     agents = {}
     
     try:
-        # Seek to beginning
-        await asyncio.sleep(0.5)  # Wait for assignment
+        # Wait for partition assignment
+        await asyncio.sleep(0.5)
         
-        # Manually seek (aiokafka doesn't have async seek_to_beginning)
+        # Seek to beginning
         for tp in consumer.assignment():
             consumer.seek(tp, 0)
         

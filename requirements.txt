@@ -9,6 +9,10 @@ strands-agents-tools[a2a_client]
 # AWS
 boto3>=1.40.0
 
+# Kafka
+aiokafka>=0.11.0
+kafka-python>=2.0.2
+
 # Web framework
 fastapi>=0.118.0
 uvicorn>=0.37.0
@@ -20,3 +24,4 @@ httpx-sse>=0.4.0
 
 # Data processing
 pandas>=2.3.0
+

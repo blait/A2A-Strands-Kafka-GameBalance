@@ -107,30 +107,4 @@ if prompt := st.chat_input("질문을 입력하세요 (예: 테란 피드백 보
             st.error(f"에러 발생: {str(e)}")
             st.info("에이전트가 실행 중인지 확인하세요: `python agents/cs_feedback_agent.py`")
 
-# Sidebar
-with st.sidebar:
-    st.header("에이전트 정보")
-    st.info(f"**URL**: {AGENT_URL}")
-    st.info("**포트**: 9002")
-    
-    st.header("빠른 질문")
-    if st.button("전체 피드백 조회"):
-        st.session_state.messages.append({"role": "user", "content": "모든 피드백 보여줘"})
-        st.rerun()
-    
-    if st.button("테란 피드백"):
-        st.session_state.messages.append({"role": "user", "content": "테란 피드백만 보여줘"})
-        st.rerun()
-    
-    if st.button("저그 피드백"):
-        st.session_state.messages.append({"role": "user", "content": "저그 피드백 보여줘"})
-        st.rerun()
-    
-    if st.button("프로토스 피드백"):
-        st.session_state.messages.append({"role": "user", "content": "프로토스 피드백 보여줘"})
-        st.rerun()
-    
-    if st.button("대화 기록 초기화"):
-        st.session_state.messages = []
-        st.rerun()
 

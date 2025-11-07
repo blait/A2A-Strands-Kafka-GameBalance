@@ -15,7 +15,7 @@ Google A2A 프로토콜과 Kafka를 활용한 Hub-Spoke 아키텍처 데모
 ### ✅ 완성된 기능
 
 1. **Kafka 기반 Agent 간 통신**
-   - Balance Agent ↔ Data Agent 완전 작동
+   - Balance Agent ↔ Data/CS Agent 완전 작동
    - Request/Response 토픽을 통한 비동기 메시징
    - Agent Registry를 통한 동적 Agent 발견
 
@@ -46,8 +46,8 @@ Google A2A 프로토콜과 Kafka를 활용한 Hub-Spoke 아키텍처 데모
 │ Balance Agent │    │  Data Agent   │    │   CS Agent    │
 │   (port 9001) │    │  (port 9003)  │    │  (port 9002)  │
 │               │    │               │    │               │
-│ - 코디네이터   │    │ - 승률 분석    │    │ - 컴플레인    │
-│ - Tool 호출   │    │ - 게임시간     │    │   (예정)      │
+│ - 코디네이터     │    │ - 승률 분석     │    │ - 컴플레인      │
+│ - Tool 호출    │    │ - 게임시간      │    │   (예정)        │
 └───────────────┘    └───────────────┘    └───────────────┘
 ```
 
@@ -65,19 +65,58 @@ agent.registry            → Agent 등록 정보
 
 ## 🚀 빠른 시작
 
-### 1. Kafka 실행
+### 최초 설정 (한 번만 실행)
 
 ```bash
-docker-compose up -d
+# 모든 초기 설정 자동 실행 (Python 패키지, Kafka, 토픽 생성)
+./setup.sh
 ```
 
-### 2. 토픽 생성
+이 스크립트는 다음을 자동으로 수행합니다:
+- Python 가상환경 생성
+- 필요한 패키지 설치 (requirements.txt)
+- .env 파일 생성
+- Kafka 시작
+- Kafka 토픽 생성
+
+### 방법 1: 자동 실행 (권장)
+
+```bash
+# 모든 서비스 시작 (Agents + GUIs)
+./restart_all.sh
+
+# 모든 서비스 종료
+./stop_all.sh
+```
+
+### 방법 2: 수동 실행
+
+#### 0. 환경 설정
+
+```bash
+# .env 파일 생성
+cp .env.example .env
+
+# 로컬 개발 시 (기본값 사용)
+# KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+
+# AWS MSK 사용 시
+# KAFKA_BOOTSTRAP_SERVERS=b-1.your-cluster.xxxxx.kafka.region.amazonaws.com:9092
+```
+
+#### 1. Kafka 실행
+
+```bash
+docker compose up -d
+```
+
+#### 2. 토픽 생성
 
 ```bash
 python scripts/create_topics.py
 ```
 
-### 3. Agent 실행
+#### 3. Agent 실행
 
 ```bash
 # Terminal 1: Data Agent
@@ -87,50 +126,8 @@ python agents/data_analysis_agent.py
 python agents/game_balance_agent.py
 ```
 
-### 4. 테스트
 
-```bash
-# 단순 질문
-python test_kafka_a2a.py
 
-# Multi-turn 대화 테스트
-python -c "
-import asyncio
-from kafka.kafka_transport import KafkaTransport
-from a2a.types import Message, Part, TextPart, Role, MessageSendParams
-from uuid import uuid4
-import json
-
-async def test():
-    transport = KafkaTransport(target_agent_name='balance')
-    
-    # Turn 1: 모호한 질문
-    msg1 = Message(kind='message', role=Role.user, 
-                   parts=[Part(TextPart(kind='text', text='승률?'))], 
-                   message_id=uuid4().hex)
-    result1 = await transport.send_message(MessageSendParams(message=msg1))
-    
-    print(f'Turn 1 - State: {result1.status.state}')
-    data1 = json.loads(result1.artifacts[0].parts[0].root.text)
-    print(f'Message: {data1[\"message\"]}')
-    
-    # Turn 2: 종족 제공
-    if result1.status.state == 'input-required':
-        msg2 = Message(kind='message', role=Role.user,
-                       parts=[Part(TextPart(kind='text', text='저그'))],
-                       message_id=uuid4().hex,
-                       context_id=result1.context_id)
-        result2 = await transport.send_message(MessageSendParams(message=msg2))
-        
-        print(f'Turn 2 - State: {result2.status.state}')
-        data2 = json.loads(result2.artifacts[0].parts[0].root.text)
-        print(f'Message: {data2[\"message\"]}')
-    
-    await transport.close()
-
-asyncio.run(test())
-"
-```
 
 ## 📁 프로젝트 구조
 
@@ -195,23 +192,5 @@ Client
 - **A2A Protocol**: Google A2A
 - **Async**: aiokafka, asyncio
 
-## 📊 테스트 결과
 
-✅ Balance Agent Kafka 통신  
-✅ Data Agent Kafka 통신  
-✅ Agent 간 Tool 호출  
-✅ Multi-turn 대화 (input-required)  
-✅ Artifact 전송  
-✅ Context 유지  
 
-## 🔜 향후 계획
-
-- [ ] CS Agent 구현
-- [ ] AWS MSK 배포
-- [ ] GUI 개선
-- [ ] 에러 핸들링 강화
-- [ ] 모니터링 대시보드
-
-## 📝 라이선스
-
-MIT License

@@ -11,6 +11,7 @@ from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCard, AgentSkill, AgentCapabilities
+from common.config import agent_config
 
 from kafka.agent_registry import register_agent
 from kafka.kafka_consumer_handler import KafkaConsumerHandler
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 agent_card = AgentCard(
     name="Game Balance Agent",
     description="게임 밸런스 조정을 위한 코디네이터 에이전트",
-    url="http://localhost:9001",
+    url=agent_config.balance_url,
     version="1.0.0",
     defaultInputModes=["text/plain"],
     defaultOutputModes=["text/plain"],
@@ -120,7 +121,7 @@ async def ask_stream(request):
 app.routes.append(Route('/ask_stream', ask_stream, methods=['POST']))
 
 if __name__ == "__main__":
-    print("⚖️ Starting Game Balance Agent on port 9001...", flush=True)
+    print(f"⚖️ Starting Game Balance Agent on port {agent_config.balance_port}...", flush=True)
     
     # 1. Register to Kafka registry
     async def register():
@@ -161,4 +162,4 @@ if __name__ == "__main__":
     print("✅ Kafka consumer started in background", flush=True)
     
     # 3. Start HTTP server
-    uvicorn.run(app, host="127.0.0.1", port=9001)
+    uvicorn.run(app, host=agent_config.balance_host, port=agent_config.balance_port)

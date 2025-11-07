@@ -90,15 +90,3 @@ if prompt := st.chat_input("질문을 입력하세요 (예: 승률 알려줘)"):
             st.error(f"에러 발생: {str(e)}")
             st.info("에이전트가 실행 중인지 확인하세요")
 
-with st.sidebar:
-    st.header("에이전트 정보")
-    st.info(f"**URL**: {AGENT_URL}")
-    
-    if st.button("🔄 대화 초기화"):
-        st.session_state.messages = []
-        st.rerun()
-    
-    st.header("빠른 질문")
-    if st.button("승률 조회"):
-        st.session_state.messages.append({"role": "user", "content": "승률 알려줘"})
-        st.rerun()

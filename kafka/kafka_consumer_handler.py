@@ -16,10 +16,13 @@ class KafkaConsumerHandler:
         self, 
         agent_name: str, 
         agent_executor, 
-        bootstrap_servers: str = "localhost:9092",
+        bootstrap_servers: str | None = None,
         task_store=None
     ):
         self.agent_name = agent_name
+        if bootstrap_servers is None:
+            from common.config import kafka_config
+            bootstrap_servers = kafka_config.bootstrap_servers
         self.bootstrap_servers = bootstrap_servers
         
         # DefaultRequestHandler 재사용

@@ -13,6 +13,7 @@ from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCard, AgentSkill, AgentCapabilities
+from common.config import agent_config
 from cs_feedback_agent_executor import CSFeedbackExecutor, agent
 from kafka.agent_registry import register_agent
 from kafka.kafka_consumer_handler import KafkaConsumerHandler
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 agent_card = AgentCard(
     name="CS Feedback Agent",
     description="게임 포럼 고객 피드백 조회 에이전트",
-    url="http://localhost:9002",
+    url=agent_config.cs_url,
     version="1.0.0",
     defaultInputModes=["text/plain"],
     defaultOutputModes=["text/plain"],
@@ -136,4 +137,4 @@ if __name__ == "__main__":
     logger.info("✅ Kafka consumer started in background")
     
     # 3. Start HTTP server
-    uvicorn.run(app, host="0.0.0.0", port=9002)
+    uvicorn.run(app, host=agent_config.cs_host, port=agent_config.cs_port)

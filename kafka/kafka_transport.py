@@ -30,11 +30,14 @@ class KafkaTransport(ClientTransport):
     def __init__(
         self,
         target_agent_name: str,
-        bootstrap_servers: str = "localhost:9092",
+        bootstrap_servers: str | None = None,
         agent_card: AgentCard | None = None,
         interceptors: list[ClientCallInterceptor] | None = None,
     ):
         self.target_agent_name = target_agent_name
+        if bootstrap_servers is None:
+            from common.config import kafka_config
+            bootstrap_servers = kafka_config.bootstrap_servers
         self.bootstrap_servers = bootstrap_servers
         self.agent_card = agent_card
         self.interceptors = interceptors or []

@@ -8,6 +8,9 @@ venv/
 env/
 ENV/
 
+# Environment variables
+.env
+
 # IDE
 .vscode/
 .idea/
@@ -22,5 +25,7 @@ Thumbs.db
 *.log
 /tmp/
 
-# Data
-data/*.csv
+# Backup files
+*.backup
+*.bak
+*_old.py

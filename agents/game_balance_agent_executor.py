@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 # A2A client
 class A2AClient:
-    def __init__(self, bootstrap_servers="localhost:9092"):
+    def __init__(self, bootstrap_servers: str | None = None):
+        if bootstrap_servers is None:
+            from common.config import kafka_config
+            bootstrap_servers = kafka_config.bootstrap_servers
         self.bootstrap_servers = bootstrap_servers
         self.agent_cards = {}
         self.transports = {}
