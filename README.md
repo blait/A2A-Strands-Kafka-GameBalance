@@ -3,8 +3,10 @@
 Google A2A 프로토콜과 Kafka를 활용한 Hub-Spoke 아키텍처 데모 (https://www.youtube.com/watch?v=DugLeNixmho)
 
 <img width="1036" height="568" alt="image" src="https://github.com/user-attachments/assets/60efe227-6a3f-4469-bee6-6bb7d1ffbf5d" />
+---
+---
 
-
+<img width="910" height="595" alt="image" src="https://github.com/user-attachments/assets/3c5dc610-50ec-4f6f-9e19-e2af3900e4d8" />
 
 
 ## 🎯 프로젝트 개요
