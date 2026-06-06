@@ -1,6 +1,6 @@
 # MSK A2A Demo - 게임 밸런스 자동화 시스템
 
-Google A2A 프로토콜과 Kafka를 활용한 Hub-Spoke 아키텍처 데모
+Google A2A 프로토콜과 Kafka를 활용한 Hub-Spoke 아키텍처 데모 (https://www.youtube.com/watch?v=DugLeNixmho)
 
 <img width="1036" height="568" alt="image" src="https://github.com/user-attachments/assets/60efe227-6a3f-4469-bee6-6bb7d1ffbf5d" />
 
