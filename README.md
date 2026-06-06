@@ -2,6 +2,10 @@
 
 Google A2A 프로토콜과 Kafka를 활용한 Hub-Spoke 아키텍처 데모
 
+<img width="1035" height="556" alt="image" src="https://github.com/user-attachments/assets/c72bdf4a-78e5-4da3-9462-d00619497b34" />
+
+
+
 ## 🎯 프로젝트 개요
 
 게임 밸런스 조정을 위한 AI 에이전트들이 Kafka를 통해 통신하는 시스템입니다.
